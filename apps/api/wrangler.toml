@@ -6,10 +6,11 @@ compatibility_date = "2026-05-04"
 NODE_ENV = "production"
 POSTHOG_HOST = "https://us.i.posthog.com"
 PUBLIC_CORS_ORIGINS = ""
+API_URL = "https://kiloforge-api.shivom-sharma-eng.workers.dev"
 
 # After running `pnpm --filter @kiloforge/api run d1:create`, replace database_id.
 [[d1_databases]]
 binding = "DB"
-database_name = "kiloforge"
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
+database_name = "launchpad-db"
+database_id = "94a649ce-30f5-45ba-9d38-b970ce11aa52"
 migrations_dir = "migrations"

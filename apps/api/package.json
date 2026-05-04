@@ -6,9 +6,9 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "build": "tsc --noEmit",
-    "d1:create": "wrangler d1 create kiloforge",
-    "d1:migrate:local": "wrangler d1 migrations apply kiloforge --local",
-    "d1:migrate": "wrangler d1 migrations apply kiloforge --remote"
+    "d1:create": "wrangler d1 create launchpad-db",
+    "d1:migrate:local": "wrangler d1 migrations apply launchpad-db --local",
+    "d1:migrate": "wrangler d1 migrations apply launchpad-db --remote"
   },
   "dependencies": {
     "hono": "^4.7.0",
