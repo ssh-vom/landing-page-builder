@@ -8,6 +8,7 @@ Build an application that takes a short prompt and autonomously generates, deplo
 - Generated site is a single-page landing page
 - Generated site uses React + Vite
 - Deployment goes to Cloudflare Pages via direct API/CLI/SDK deploy flow
+- Do not use Vercel for deployment, preview hosting, or token management in MVP
 - Each generated landing page should most likely get its own Cloudflare Pages project
 - Analytics use one shared PostHog project
 - PostHog events must be segmentable by generated page ID / generation ID
@@ -148,6 +149,7 @@ Responsibilities:
 - create a new Cloudflare Pages project for the generated landing page
 - deploy the built output
 - return and store the deployed URL
+- use Cloudflare-only deployment infrastructure; no Vercel integration should exist in the MVP path
 
 Failure handling:
 - automatically retry deployment failures
@@ -240,6 +242,7 @@ Fields:
 - Keep styling neutral and minimal
 - Avoid advanced customization in v1
 - Avoid auth and custom domains in v1
+- Keep hosting/deployment vendor scope limited to Cloudflare only
 - Support iteration / reprompting later in v2
 - Support richer responsiveness/QA improvements later in v2
 

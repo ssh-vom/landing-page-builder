@@ -8,6 +8,8 @@ dist/
 build/
 out/
 .output/
+generated-sites/
+apps/server/generated-sites*/
 
 # Environment
 .env
@@ -44,6 +46,12 @@ Thumbs.db
 # Testing
 coverage/
 .nyc_output/
+
+# Database
+apps/server/data/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
 
 # Misc
 .cache/
