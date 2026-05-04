@@ -22,7 +22,7 @@ FROM base AS runner
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build /app /app
-# Reinstall to rebuild native modules (better-sqlite3) in place
-RUN pnpm install --frozen-lockfile
+# Force rebuild native modules (better-sqlite3) for this platform
+RUN pnpm rebuild
 EXPOSE 3001
 CMD ["pnpm", "--filter", "server", "run", "start"]
