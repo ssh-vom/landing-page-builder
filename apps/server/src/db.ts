@@ -37,6 +37,9 @@ export function migrate() {
       cloudflare_project_name TEXT,
       deployment_url TEXT,
       project_dir TEXT,
+      git_repo_url TEXT,
+      git_branch TEXT,
+      git_commit_sha TEXT,
       retry_count INTEGER NOT NULL DEFAULT 0,
       error_message TEXT,
       created_at TEXT NOT NULL,
@@ -75,8 +78,10 @@ export function migrate() {
     CREATE INDEX IF NOT EXISTS idx_analytics_event ON analytics_events(event);
   `);
 
-  const hasProjectDir = database
-    .prepare("SELECT 1 FROM pragma_table_info('generations') WHERE name = ?")
-    .get('project_dir');
-  if (!hasProjectDir) database.exec('ALTER TABLE generations ADD COLUMN project_dir TEXT');
+  for (const column of ['project_dir', 'git_repo_url', 'git_branch', 'git_commit_sha']) {
+    const exists = database
+      .prepare("SELECT 1 FROM pragma_table_info('generations') WHERE name = ?")
+      .get(column);
+    if (!exists) database.exec(`ALTER TABLE generations ADD COLUMN ${column} TEXT`);
+  }
 }

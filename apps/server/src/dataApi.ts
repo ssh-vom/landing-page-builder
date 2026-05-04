@@ -11,6 +11,9 @@ export type ApiGeneration = {
   cloudflare_project_name: string | null;
   deployment_url: string | null;
   project_dir: string | null;
+  git_repo_url: string | null;
+  git_branch: string | null;
+  git_commit_sha: string | null;
   retry_count: number;
   error_message: string | null;
   created_at: string;

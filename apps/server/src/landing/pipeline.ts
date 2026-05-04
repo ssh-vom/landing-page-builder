@@ -6,6 +6,7 @@ import { buildLandingApp } from './builder.js';
 import { runManagedJsonAgent } from './claudeManaged.js';
 import { editLandingApp } from './editor.js';
 import { deployLandingApp } from './deployer.js';
+import { cloneGeneratedSiteFromGit, commitGeneratedSiteChanges, persistGeneratedSiteToGit } from './gitPersistence.js';
 import type { LandingBrief, LandingCopy, GenerationStage, GenerationStatus } from './types.js';
 
 function now() { return new Date().toISOString(); }
@@ -20,6 +21,9 @@ type PatchInput = Partial<{
   cloudflare_project_name: string | null;
   deployment_url: string | null;
   project_dir: string | null;
+  git_repo_url: string | null;
+  git_branch: string | null;
+  git_commit_sha: string | null;
   retry_count: number;
   error_message: string | null;
 }>;
@@ -33,11 +37,12 @@ async function persistPatchGeneration(db: Database.Database, id: string, input: 
 }
 
 function patchLocalGeneration(db: Database.Database, id: string, input: PatchInput) {
-  const row = db.prepare('SELECT cloudflare_project_name, deployment_url, project_dir, error_message FROM generations WHERE id = ?').get(id) as any;
+  const row = db.prepare('SELECT cloudflare_project_name, deployment_url, project_dir, git_repo_url, git_branch, git_commit_sha, error_message FROM generations WHERE id = ?').get(id) as any;
   db.prepare(`UPDATE generations SET
     stage = COALESCE(?, stage), status = COALESCE(?, status),
     brief_json = COALESCE(?, brief_json), copy_json = COALESCE(?, copy_json),
     cloudflare_project_name = ?, deployment_url = ?, project_dir = ?,
+    git_repo_url = ?, git_branch = ?, git_commit_sha = ?,
     retry_count = COALESCE(?, retry_count),
     error_message = ?, updated_at = ? WHERE id = ?`).run(
       input.stage ?? null,
@@ -47,6 +52,9 @@ function patchLocalGeneration(db: Database.Database, id: string, input: PatchInp
       'cloudflare_project_name' in input ? input.cloudflare_project_name : row.cloudflare_project_name,
       'deployment_url' in input ? input.deployment_url : row.deployment_url,
       'project_dir' in input ? input.project_dir : row.project_dir,
+      'git_repo_url' in input ? input.git_repo_url : row.git_repo_url,
+      'git_branch' in input ? input.git_branch : row.git_branch,
+      'git_commit_sha' in input ? input.git_commit_sha : row.git_commit_sha,
       input.retry_count ?? null,
       'error_message' in input ? input.error_message : row.error_message,
       now(), id,
@@ -83,8 +91,13 @@ export async function runGenerationPipeline(db: Database.Database, generationId:
 
     await persistPatchGeneration(db, generationId, { stage: 'building' });
     const build = await buildLandingApp({ generationId, generatedPageId: generation.generated_page_id, brief, copy });
+    const gitMetadata = await persistGeneratedSiteToGit({
+      projectDir: build.project_dir,
+      generatedPageId: generation.generated_page_id,
+      message: `Generate ${generation.generated_page_id}`,
+    });
 
-    await persistPatchGeneration(db, generationId, { stage: 'deploying', cloudflare_project_name: build.project_name, project_dir: build.project_dir });
+    await persistPatchGeneration(db, generationId, { stage: 'deploying', cloudflare_project_name: build.project_name, project_dir: build.project_dir, ...(gitMetadata ?? {}) });
     const deployed = await deployLandingApp(build);
     if (deployed.deployment_url.includes('.pages.dev')) {
       config.publicCorsOrigins.push(new URL(deployed.deployment_url).origin);
@@ -102,7 +115,17 @@ export async function runGenerationPipeline(db: Database.Database, generationId:
   }
 }
 
-type RegenGen = { id: string; prompt: string; generated_page_id: string; project_dir: string | null; status: string };
+type RegenGen = {
+  id: string;
+  prompt: string;
+  generated_page_id: string;
+  cloudflare_project_name: string | null;
+  project_dir: string | null;
+  git_repo_url: string | null;
+  git_branch: string | null;
+  git_commit_sha: string | null;
+  status: string;
+};
 
 export async function runRegeneratePipeline(db: Database.Database, generationId: string, changePrompt: string) {
   let generation: RegenGen | undefined;
@@ -110,23 +133,32 @@ export async function runRegeneratePipeline(db: Database.Database, generationId:
     const row = await dataApi.getGeneration(generationId).catch(() => undefined);
     if (row) generation = row as RegenGen;
   } else {
-    generation = db.prepare('SELECT id, prompt, generated_page_id, project_dir, status FROM generations WHERE id = ?').get(generationId) as RegenGen | undefined;
+    generation = db.prepare('SELECT id, prompt, generated_page_id, cloudflare_project_name, project_dir, git_repo_url, git_branch, git_commit_sha, status FROM generations WHERE id = ?').get(generationId) as RegenGen | undefined;
   }
 
   if (!generation) throw new Error(`Generation not found: ${generationId}`);
-  if (!generation.project_dir) throw new Error('No project_dir found for this generation. It may not have completed initial build yet.');
 
   try {
     await persistPatchGeneration(db, generationId, { stage: 'planning', status: 'in_progress', error_message: null });
 
-    // Edit existing code
-    await editLandingApp({ projectDir: generation.project_dir, changePrompt });
+    let projectDir = generation.project_dir;
+    if (generation.git_repo_url && generation.git_branch) {
+      const checkout = await cloneGeneratedSiteFromGit({ gitRepoUrl: generation.git_repo_url, gitBranch: generation.git_branch, generatedPageId: generation.generated_page_id });
+      projectDir = checkout.projectDir;
+      await persistPatchGeneration(db, generationId, { project_dir: projectDir });
+    }
+    if (!projectDir) throw new Error('No git metadata or project_dir found for this generation. It may not have completed initial build yet.');
 
-    await persistPatchGeneration(db, generationId, { stage: 'deploying' });
+    await editLandingApp({ projectDir, changePrompt });
+    const gitMetadata = generation.git_branch
+      ? await commitGeneratedSiteChanges({ projectDir, message: `Regenerate ${generation.generated_page_id}` })
+      : null;
+
+    await persistPatchGeneration(db, generationId, { stage: 'deploying', ...(gitMetadata ?? {}) });
     const deployed = await deployLandingApp({
-      project_dir: generation.project_dir,
-      dist_dir: `${generation.project_dir}/dist`,
-      project_name: generation.generated_page_id,
+      project_dir: projectDir,
+      dist_dir: `${projectDir}/dist`,
+      project_name: generation.cloudflare_project_name ?? `kiloforge-${generation.generated_page_id.replace(/[^a-zA-Z0-9-]/g, '-').slice(0, 32)}`.toLowerCase(),
     });
     if (deployed.deployment_url.includes('.pages.dev')) {
       config.publicCorsOrigins.push(new URL(deployed.deployment_url).origin);

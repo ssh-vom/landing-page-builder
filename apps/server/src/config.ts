@@ -21,6 +21,10 @@ const envSchema = z.object({
   CLOUDFLARE_PAGES_BRANCH: z.string().min(1).default('main'),
   DEPLOYMENT_MODE: z.enum(['cloudflare', 'local']).default('cloudflare'),
   PERSISTENCE_API_URL: z.string().url().optional(),
+  GENERATED_SITES_GIT_URL: z.string().trim().default(''),
+  GENERATED_SITES_GIT_TOKEN: z.string().default(''),
+  GENERATED_SITES_GIT_USER_NAME: z.string().trim().min(1).default('Kiloforge Bot'),
+  GENERATED_SITES_GIT_USER_EMAIL: z.string().trim().email().default('bot@kiloforge.local'),
 });
 
 const env = envSchema.parse(process.env);
@@ -43,4 +47,8 @@ export const config = {
   cloudflarePagesBranch: env.CLOUDFLARE_PAGES_BRANCH,
   deploymentMode: env.DEPLOYMENT_MODE,
   persistenceApiUrl: env.PERSISTENCE_API_URL,
+  generatedSitesGitUrl: env.GENERATED_SITES_GIT_URL,
+  generatedSitesGitToken: env.GENERATED_SITES_GIT_TOKEN,
+  generatedSitesGitUserName: env.GENERATED_SITES_GIT_USER_NAME,
+  generatedSitesGitUserEmail: env.GENERATED_SITES_GIT_USER_EMAIL,
 };

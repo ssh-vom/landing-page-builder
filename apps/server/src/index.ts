@@ -55,6 +55,9 @@ type GenerationRow = {
   cloudflare_project_name: string | null;
   deployment_url: string | null;
   project_dir: string | null;
+  git_repo_url: string | null;
+  git_branch: string | null;
+  git_commit_sha: string | null;
   retry_count: number;
   error_message: string | null;
   created_at: string;
@@ -73,6 +76,9 @@ function serializeGeneration(row: GenerationRow) {
     cloudflare_project_name: row.cloudflare_project_name,
     deployment_url: row.deployment_url,
     project_dir: row.project_dir,
+    git_repo_url: row.git_repo_url,
+    git_branch: row.git_branch,
+    git_commit_sha: row.git_commit_sha,
     retry_count: row.retry_count,
     error_message: row.error_message,
     created_at: row.created_at,
@@ -167,6 +173,10 @@ app.patch('/generations/:id', async (req, res) => {
     copy: jsonRecord.optional(),
     cloudflare_project_name: z.string().trim().min(1).max(200).nullable().optional(),
     deployment_url: z.string().trim().url().nullable().optional(),
+    project_dir: z.string().trim().min(1).max(1000).nullable().optional(),
+    git_repo_url: z.string().trim().min(1).max(1000).nullable().optional(),
+    git_branch: z.string().trim().min(1).max(255).nullable().optional(),
+    git_commit_sha: z.string().trim().regex(/^[0-9a-f]{7,64}$/i).nullable().optional(),
     retry_count: z.number().int().min(0).optional(),
     error_message: z.string().max(8000).nullable().optional(),
   }).refine((value) => Object.keys(value).length > 0, 'at least one field is required');
@@ -187,6 +197,10 @@ app.patch('/generations/:id', async (req, res) => {
       copy_json = COALESCE(?, copy_json),
       cloudflare_project_name = ?,
       deployment_url = ?,
+      project_dir = ?,
+      git_repo_url = ?,
+      git_branch = ?,
+      git_commit_sha = ?,
       retry_count = COALESCE(?, retry_count),
       error_message = ?,
       updated_at = ?
@@ -198,6 +212,10 @@ app.patch('/generations/:id', async (req, res) => {
     next.copy ? JSON.stringify(next.copy) : null,
     'cloudflare_project_name' in next ? next.cloudflare_project_name : existing.cloudflare_project_name,
     'deployment_url' in next ? next.deployment_url : existing.deployment_url,
+    'project_dir' in next ? next.project_dir : existing.project_dir,
+    'git_repo_url' in next ? next.git_repo_url : existing.git_repo_url,
+    'git_branch' in next ? next.git_branch : existing.git_branch,
+    'git_commit_sha' in next ? next.git_commit_sha : existing.git_commit_sha,
     next.retry_count ?? null,
     'error_message' in next ? next.error_message : existing.error_message,
     now(),
@@ -241,6 +259,9 @@ app.post('/analytics/events', async (req, res) => {
     generation_id: z.string().trim().min(1).optional(),
     generated_page_id: z.string().trim().min(1).optional(),
     project_name: z.string().trim().min(1).optional(),
+    cloudflare_project_name: z.string().trim().min(1).optional(),
+    deployment_url: z.string().trim().url().optional(),
+    site_url: z.string().trim().url().optional(),
     environment: z.string().trim().min(1).optional(),
     properties: jsonRecord.optional(),
   });
@@ -254,6 +275,9 @@ app.post('/analytics/events', async (req, res) => {
     generation_id: parsed.data.generation_id ?? parsed.data.properties?.generation_id,
     generated_page_id: parsed.data.generated_page_id ?? parsed.data.properties?.generated_page_id,
     project_name: parsed.data.project_name ?? parsed.data.properties?.project_name,
+    cloudflare_project_name: parsed.data.cloudflare_project_name ?? parsed.data.properties?.cloudflare_project_name,
+    deployment_url: parsed.data.deployment_url ?? parsed.data.properties?.deployment_url,
+    site_url: parsed.data.site_url ?? parsed.data.properties?.site_url,
     environment: parsed.data.environment ?? config.nodeEnv,
   };
   const id = randomUUID();

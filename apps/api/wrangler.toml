@@ -5,7 +5,7 @@ compatibility_date = "2026-05-04"
 [vars]
 NODE_ENV = "production"
 POSTHOG_HOST = "https://us.i.posthog.com"
-PUBLIC_CORS_ORIGINS = ""
+PUBLIC_CORS_ORIGINS = "https://kiloforge-web.pages.dev"
 API_URL = "https://kiloforge-api.shivom-sharma-eng.workers.dev"
 
 # After running `pnpm --filter @kiloforge/api run d1:create`, replace database_id.

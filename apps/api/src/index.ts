@@ -15,7 +15,8 @@ type Env = {
 
 type GenerationRow = {
   id: string; prompt: string; stage: string; status: string; brief_json: string | null; copy_json: string | null;
-  generated_page_id: string; cloudflare_project_name: string | null; deployment_url: string | null; retry_count: number;
+  generated_page_id: string; cloudflare_project_name: string | null; deployment_url: string | null; project_dir: string | null;
+  git_repo_url: string | null; git_branch: string | null; git_commit_sha: string | null; retry_count: number;
   error_message: string | null; created_at: string; updated_at: string;
 };
 
@@ -66,16 +67,20 @@ function js(value: unknown) { return JSON.stringify(value).replace(/</g, '\\u003
 function publicApiUrl(c: any) { return c.env.API_URL || new URL(c.req.url).origin; }
 function projectName(pageId: string) { return `kiloforge-${pageId.replace(/[^a-zA-Z0-9-]/g, '-').slice(0, 48)}`.toLowerCase(); }
 
-async function patchGeneration(c: any, id: string, input: Partial<{ stage: string; status: string; brief: LandingBrief; copy: LandingCopy; cloudflare_project_name: string | null; deployment_url: string | null; retry_count: number; error_message: string | null }>) {
+async function patchGeneration(c: any, id: string, input: Partial<{ stage: string; status: string; brief: LandingBrief; copy: LandingCopy; cloudflare_project_name: string | null; deployment_url: string | null; project_dir: string | null; git_repo_url: string | null; git_branch: string | null; git_commit_sha: string | null; retry_count: number; error_message: string | null }>) {
   const existing = await (c.env.DB as D1Database).prepare('SELECT * FROM generations WHERE id = ?').bind(id).first<GenerationRow>();
   if (!existing) throw new Error(`Generation not found: ${id}`);
-  await c.env.DB.prepare(`UPDATE generations SET stage=COALESCE(?, stage), status=COALESCE(?, status), brief_json=COALESCE(?, brief_json), copy_json=COALESCE(?, copy_json), cloudflare_project_name=?, deployment_url=?, retry_count=COALESCE(?, retry_count), error_message=?, updated_at=? WHERE id=?`).bind(
+  await c.env.DB.prepare(`UPDATE generations SET stage=COALESCE(?, stage), status=COALESCE(?, status), brief_json=COALESCE(?, brief_json), copy_json=COALESCE(?, copy_json), cloudflare_project_name=?, deployment_url=?, project_dir=?, git_repo_url=?, git_branch=?, git_commit_sha=?, retry_count=COALESCE(?, retry_count), error_message=?, updated_at=? WHERE id=?`).bind(
     input.stage ?? null,
     input.status ?? null,
     input.brief ? JSON.stringify(input.brief) : null,
     input.copy ? JSON.stringify(input.copy) : null,
     'cloudflare_project_name' in input ? input.cloudflare_project_name : existing.cloudflare_project_name,
     'deployment_url' in input ? input.deployment_url : existing.deployment_url,
+    'project_dir' in input ? input.project_dir : existing.project_dir,
+    'git_repo_url' in input ? input.git_repo_url : existing.git_repo_url,
+    'git_branch' in input ? input.git_branch : existing.git_branch,
+    'git_commit_sha' in input ? input.git_commit_sha : existing.git_commit_sha,
     input.retry_count ?? null,
     'error_message' in input ? input.error_message : existing.error_message,
     now(), id,
@@ -135,7 +140,7 @@ async function runGeneration(c: any, id: string) {
 
 function renderSite(c: any, generation: ReturnType<typeof serializeGeneration>) {
   const copy = generation.copy as LandingCopy;
-  const meta = { generation_id: generation.id, generated_page_id: generation.generated_page_id, project_name: generation.cloudflare_project_name, environment: c.env.NODE_ENV ?? 'production' };
+  const meta = { generation_id: generation.id, generated_page_id: generation.generated_page_id, project_name: generation.cloudflare_project_name, cloudflare_project_name: generation.cloudflare_project_name, deployment_url: generation.deployment_url, site_url: generation.deployment_url, environment: c.env.NODE_ENV ?? 'production' };
   const apiUrl = publicApiUrl(c);
   const posthogKey = c.env.POSTHOG_KEY || '';
   const posthogHost = c.env.POSTHOG_HOST || 'https://us.i.posthog.com';
@@ -202,7 +207,7 @@ app.get('/sites/:pageId', async (c) => {
 });
 
 app.patch('/generations/:id', async (c) => {
-  const schema = z.object({ stage: stageSchema.optional(), status: statusSchema.optional(), brief: jsonRecord.optional(), copy: jsonRecord.optional(), cloudflare_project_name: z.string().trim().min(1).max(200).nullable().optional(), deployment_url: z.string().trim().url().nullable().optional(), retry_count: z.number().int().min(0).optional(), error_message: z.string().max(8000).nullable().optional() }).refine((v) => Object.keys(v).length > 0);
+  const schema = z.object({ stage: stageSchema.optional(), status: statusSchema.optional(), brief: jsonRecord.optional(), copy: jsonRecord.optional(), cloudflare_project_name: z.string().trim().min(1).max(200).nullable().optional(), deployment_url: z.string().trim().url().nullable().optional(), project_dir: z.string().trim().min(1).max(1000).nullable().optional(), git_repo_url: z.string().trim().min(1).max(1000).nullable().optional(), git_branch: z.string().trim().min(1).max(255).nullable().optional(), git_commit_sha: z.string().trim().regex(/^[0-9a-f]{7,64}$/i).nullable().optional(), retry_count: z.number().int().min(0).optional(), error_message: z.string().max(8000).nullable().optional() }).refine((v) => Object.keys(v).length > 0);
   const parsed = schema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return badRequest(c, parsed.error);
   const existing = await c.env.DB.prepare('SELECT * FROM generations WHERE id = ?').bind(c.req.param('id')).first<GenerationRow>();
@@ -224,10 +229,10 @@ app.post('/leads', async (c) => {
 });
 
 app.post('/analytics/events', async (c) => {
-  const schema = z.object({ event: z.enum(['landing_page_viewed', 'cta_email_submit_clicked', 'email_capture_submitted', 'email_capture_failed']), generation_id: z.string().trim().min(1).optional(), generated_page_id: z.string().trim().min(1).optional(), project_name: z.string().trim().min(1).optional(), environment: z.string().trim().min(1).optional(), properties: jsonRecord.optional() });
+  const schema = z.object({ event: z.enum(['landing_page_viewed', 'cta_email_submit_clicked', 'email_capture_submitted', 'email_capture_failed']), generation_id: z.string().trim().min(1).optional(), generated_page_id: z.string().trim().min(1).optional(), project_name: z.string().trim().min(1).optional(), cloudflare_project_name: z.string().trim().min(1).optional(), deployment_url: z.string().trim().url().optional(), site_url: z.string().trim().url().optional(), environment: z.string().trim().min(1).optional(), properties: jsonRecord.optional() });
   const parsed = schema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return badRequest(c, parsed.error);
-  const properties = { ...(parsed.data.properties ?? {}), generation_id: parsed.data.generation_id ?? parsed.data.properties?.generation_id, generated_page_id: parsed.data.generated_page_id ?? parsed.data.properties?.generated_page_id, project_name: parsed.data.project_name ?? parsed.data.properties?.project_name, environment: parsed.data.environment ?? c.env.NODE_ENV ?? 'production' };
+  const properties = { ...(parsed.data.properties ?? {}), generation_id: parsed.data.generation_id ?? parsed.data.properties?.generation_id, generated_page_id: parsed.data.generated_page_id ?? parsed.data.properties?.generated_page_id, project_name: parsed.data.project_name ?? parsed.data.properties?.project_name, cloudflare_project_name: parsed.data.cloudflare_project_name ?? parsed.data.properties?.cloudflare_project_name, deployment_url: parsed.data.deployment_url ?? parsed.data.properties?.deployment_url, site_url: parsed.data.site_url ?? parsed.data.properties?.site_url, environment: parsed.data.environment ?? c.env.NODE_ENV ?? 'production' };
   const id = crypto.randomUUID(); const ts = now();
   await c.env.DB.prepare('INSERT INTO analytics_events (id, event, generation_id, generated_page_id, project_name, environment, properties_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').bind(id, parsed.data.event, properties.generation_id ?? null, properties.generated_page_id ?? null, properties.project_name ?? null, String(properties.environment), JSON.stringify(properties), ts).run();
   return c.json({ id, event: parsed.data.event, properties, created_at: ts }, 201);

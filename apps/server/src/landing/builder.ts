@@ -42,7 +42,15 @@ import posthog from 'posthog-js';
 import './styles.css';
 
 const copy = ${js(input.copy)};
-const meta = ${js({ generation_id: input.generationId, generated_page_id: input.generatedPageId, project_name: projectName, environment: config.nodeEnv })};
+const meta = ${js({
+    generation_id: input.generationId,
+    generated_page_id: input.generatedPageId,
+    project_name: projectName,
+    cloudflare_project_name: projectName,
+    deployment_url: config.deploymentMode === 'cloudflare' ? `https://${projectName}.pages.dev` : null,
+    site_url: config.deploymentMode === 'cloudflare' ? `https://${projectName}.pages.dev` : null,
+    environment: config.nodeEnv,
+  })};
 const apiUrl = import.meta.env.VITE_API_URL || ${js(config.apiUrl)};
 const posthogKey = import.meta.env.VITE_POSTHOG_KEY || ${js(config.posthogKey)};
 const posthogHost = import.meta.env.VITE_POSTHOG_HOST || ${js(config.posthogHost)};

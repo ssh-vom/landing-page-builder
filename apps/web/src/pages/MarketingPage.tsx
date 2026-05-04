@@ -6,16 +6,16 @@ import { FinalCTA } from '@/components/marketing/FinalCTA';
 import { MarketingFooter } from '@/components/marketing/MarketingFooter';
 
 export default function MarketingPage() {
-  return (
-    <div className="bg-white text-ink min-h-screen">
-      <MarketingNav />
-      <main>
-        <Hero />
-        <FeatureGrid />
-        <ProcessTimeline />
-        <FinalCTA />
-      </main>
-      <MarketingFooter />
-    </div>
-  );
+    return (
+        <div className="bg-white text-ink min-h-screen">
+            <MarketingNav />
+            <main>
+                <Hero />
+                {/* <FeatureGrid /> */}
+                {/* <ProcessTimeline /> */}
+                {/* <FinalCTA /> */}
+            </main>
+            {/* <MarketingFooter /> */}
+        </div>
+    );
 }
