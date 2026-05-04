@@ -13,6 +13,7 @@ apps/server/generated-sites*/
 
 # Environment
 .env
+.env.railway
 .env.local
 .env.*.local
 
