@@ -1,0 +1,9 @@
+{
+  "name": "kiloforge",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --parallel --filter './apps/*' run dev",
+    "build": "pnpm --recursive run build",
+    "setup": "pnpm --filter server run setup"
+  }
+}
