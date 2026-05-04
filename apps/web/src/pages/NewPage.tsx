@@ -1,16 +1,24 @@
+import { useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { PromptIntake } from '@/components/flow/PromptIntake';
 import { Logo } from '@/components/ui/Logo';
+import { createGeneration } from '@/lib/api';
 
 export default function NewPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const initialPrompt = searchParams.get('prompt') ?? '';
+  const [error, setError] = useState<string | null>(null);
 
-  function handleSubmit(prompt: string) {
-    const id = `gen_${Math.random().toString(36).slice(2, 10)}`;
-    navigate(`/g/${id}?status=in_progress&prompt=${encodeURIComponent(prompt)}`);
+  async function handleSubmit(prompt: string) {
+    setError(null);
+    try {
+      const generation = await createGeneration(prompt);
+      navigate(`/g/${generation.id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to start generation');
+    }
   }
 
   return (
@@ -28,6 +36,7 @@ export default function NewPage() {
           </Link>
         </div>
       </header>
+      {error ? <div className="mx-auto max-w-[720px] px-6 pt-6 text-sm text-red-600">{error}</div> : null}
       <PromptIntake initialPrompt={initialPrompt} onSubmit={handleSubmit} />
     </div>
   );

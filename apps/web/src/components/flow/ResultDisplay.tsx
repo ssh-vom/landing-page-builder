@@ -5,10 +5,12 @@ import { GeneratedSitePreview } from './GeneratedSitePreview';
 
 interface ResultDisplayProps {
   url: string;
+  displayUrl?: string;
+  cloudflareProject?: string;
   onEdit: () => void;
 }
 
-export function ResultDisplay({ url, onEdit }: ResultDisplayProps) {
+export function ResultDisplay({ url, displayUrl = url, cloudflareProject = '—', onEdit }: ResultDisplayProps) {
   const [copied, setCopied] = useState(false);
 
   function copy() {
@@ -51,13 +53,13 @@ export function ResultDisplay({ url, onEdit }: ResultDisplayProps) {
           <div className="bg-white border border-gray-100 rounded-[var(--radius-lg)] p-5 mb-4 shadow-[var(--shadow-sketch)]">
             <div className="text-[11px] font-medium text-ink-faint uppercase tracking-wide mb-2">Live URL</div>
             <div className="flex items-center gap-2 mb-3">
-              <div className="flex-1 text-[13px] text-ink mono truncate">{url}</div>
+              <div className="flex-1 text-[13px] text-ink mono truncate">{displayUrl}</div>
             </div>
             <div className="flex items-center gap-2">
               <Button variant="secondary" size="sm" className="flex-1" onClick={copy} iconLeft={copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}>
                 {copied ? 'Copied' : 'Copy'}
               </Button>
-              <a href={`https://${url}`} target="_blank" rel="noreferrer" className="flex-1">
+              <a href={url} target="_blank" rel="noreferrer" className="flex-1">
                 <Button variant="ink" size="sm" className="w-full" iconRight={<ExternalLink className="size-3.5" />}>
                   Open
                 </Button>
@@ -85,7 +87,7 @@ export function ResultDisplay({ url, onEdit }: ResultDisplayProps) {
             <div className="divide-y divide-gray-100">
               <StatRow label="Generation time" value="1m 32s" />
               <StatRow label="Sections" value="5" />
-              <StatRow label="Cloudflare project" value="meetday-9f3a" mono />
+              <StatRow label="Cloudflare project" value={cloudflareProject} mono />
               <StatRow label="PostHog project" value="lp-shared" mono />
             </div>
           </div>

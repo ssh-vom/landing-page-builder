@@ -1,7 +1,6 @@
-import { useEffect, useState } from 'react';
-import { Link, useParams, useSearchParams, useNavigate } from 'react-router-dom';
+import { useEffect, useState, useCallback } from 'react';
+import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
-import { DEFAULT_STAGES, type Stage, type StageStatus } from '@/lib/types';
 import { StageProgress } from '@/components/flow/StageProgress';
 import { ResultDisplay } from '@/components/flow/ResultDisplay';
 import { Logo } from '@/components/ui/Logo';
@@ -9,58 +8,73 @@ import { WorkspaceShell } from '@/components/workspace/WorkspaceShell';
 import { WorkspaceTopBar } from '@/components/workspace/WorkspaceTopBar';
 import { SectionSidebar } from '@/components/workspace/SectionSidebar';
 import { PreviewCanvas } from '@/components/workspace/PreviewCanvas';
-import { AssistantPanel } from '@/components/workspace/AssistantPanel';
 import { MockLandingPreview } from '@/components/workspace/MockLandingPreview';
+import { type ApiGeneration, displayUrl, generationUrl, getGeneration, regenerateGeneration, stagesFromGeneration } from '@/lib/api';
 
 type View = 'progress' | 'result' | 'editor';
 
 export default function GenerationPage() {
-  const { id = 'gen_demo' } = useParams();
-  const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
-
-  const initialStatus = searchParams.get('status') ?? 'complete';
-  const prompt = searchParams.get('prompt') ?? 'An autoscheduling assistant that finds the best meeting times.';
-
-  const [view, setView] = useState<View>(
-    initialStatus === 'in_progress' ? 'progress' : 'editor',
-  );
-  const [stages, setStages] = useState<Stage[]>(() =>
-    initialStatus === 'in_progress'
-      ? DEFAULT_STAGES.map((s, i) =>
-          i === 0 ? { ...s, status: 'in_progress' as StageStatus } : s,
-        )
-      : DEFAULT_STAGES.map((s) => ({ ...s, status: 'complete' as StageStatus })),
-  );
+  const { id = '' } = useParams();
+  const [view, setView] = useState<View>('progress');
+  const [generation, setGeneration] = useState<ApiGeneration | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState('hero');
+  const [isRegenerating, setIsRegenerating] = useState(false);
 
-  // Simulated stage progression — replace with real polling against backend
+  const load = useCallback(async () => {
+    if (!id) return;
+    const next = await getGeneration(id);
+    setGeneration(next);
+    if (next.status === 'complete') setView((current) => current === 'progress' ? 'result' : current);
+    if (next.status === 'failed') setView('progress');
+  }, [id]);
+
   useEffect(() => {
-    if (view !== 'progress') return;
+    let cancelled = false;
+    async function tick() {
+      try {
+        const next = await getGeneration(id);
+        if (cancelled) return;
+        setGeneration(next);
+        if (next.status === 'complete') setView((current) => current === 'progress' ? 'result' : current);
+        if (next.status === 'failed') setView('progress');
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load generation');
+      }
+    }
+    tick();
+    const interval = setInterval(tick, generation?.status === 'in_progress' || !generation ? 2000 : 8000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [id, generation?.status]);
 
-    const interval = setInterval(() => {
-      setStages((prev) => {
-        const idx = prev.findIndex((s) => s.status === 'in_progress');
-        if (idx === -1) return prev;
-        const next = [...prev];
-        next[idx] = { ...next[idx], status: 'complete' };
-        if (idx + 1 < next.length) {
-          next[idx + 1] = { ...next[idx + 1], status: 'in_progress' };
-        } else {
-          setTimeout(() => setView('result'), 800);
-        }
-        return next;
-      });
-    }, 1400);
+  const handleRegenerate = useCallback(async (prompt: string) => {
+    if (!id) return;
+    setIsRegenerating(true);
+    setError(null);
+    try {
+      await regenerateGeneration(id, prompt);
+      setView('progress');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to regenerate');
+    } finally {
+      setIsRegenerating(false);
+    }
+  }, [id]);
 
-    return () => clearInterval(interval);
-  }, [view]);
+  const prompt = generation?.prompt ?? 'Loading generation…';
+  const liveUrl = generationUrl(generation);
+  const displayLiveUrl = liveUrl ? displayUrl(liveUrl) : 'Deployment pending';
+  const projectName = generation?.cloudflare_project_name ?? generation?.copy?.hero_headline ?? 'Generated page';
+  const workspaceStatus = generation?.status === 'complete' ? 'live' : generation?.status === 'failed' ? 'draft' : 'building';
 
   if (view === 'progress') {
     return (
       <div className="bg-white text-ink min-h-screen">
         <FlowHeader id={id} />
-        <StageProgress stages={stages} prompt={prompt} />
+        {error || generation?.error_message ? (
+          <div className="mx-auto max-w-[760px] px-6 pt-8 text-sm text-red-600">{error ?? generation?.error_message}</div>
+        ) : null}
+        <StageProgress stages={stagesFromGeneration(generation)} prompt={prompt} />
       </div>
     );
   }
@@ -70,24 +84,35 @@ export default function GenerationPage() {
       <div className="bg-white text-ink min-h-screen">
         <FlowHeader id={id} />
         <ResultDisplay
-          url={`meetday-${id.slice(-4)}.launchpad.ai`}
+          url={liveUrl}
+          displayUrl={displayLiveUrl}
+          cloudflareProject={generation?.cloudflare_project_name ?? '—'}
           onEdit={() => setView('editor')}
         />
       </div>
     );
   }
 
-  // Editor view
   return (
     <WorkspaceShell
-      topBar={<WorkspaceTopBar projectName="Meetday" status="live" />}
-      sidebar={<SectionSidebar active={activeSection} onSelect={setActiveSection} />}
+      topBar={<WorkspaceTopBar projectName={projectName} status={workspaceStatus} />}
+      sidebar={
+        <SectionSidebar
+          active={activeSection}
+          onSelect={setActiveSection}
+          onRegenerate={handleRegenerate}
+          isRegenerating={isRegenerating}
+        />
+      }
       canvas={
-        <PreviewCanvas url={`meetday-${id.slice(-4)}.launchpad.ai`}>
-          <MockLandingPreview />
+        <PreviewCanvas url={displayLiveUrl}>
+          {liveUrl ? (
+            <iframe title="Generated landing page" src={liveUrl} className="w-full h-[760px] border-0 bg-white" />
+          ) : (
+            <MockLandingPreview />
+          )}
         </PreviewCanvas>
       }
-      assistant={<AssistantPanel />}
     />
   );
 }

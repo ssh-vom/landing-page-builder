@@ -3,12 +3,13 @@ import {
   ChevronDown,
   Layout,
   Sparkles,
-  Type,
   Briefcase,
   Tag,
   MessageCircle,
   ArrowRightCircle,
   Plus,
+  Loader2,
+  Send,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
@@ -29,10 +30,25 @@ const sections: Section[] = [
 interface SectionSidebarProps {
   active: string;
   onSelect: (id: string) => void;
+  onRegenerate?: (prompt: string) => void;
+  isRegenerating?: boolean;
 }
 
-export function SectionSidebar({ active, onSelect }: SectionSidebarProps) {
+export function SectionSidebar({ active, onSelect, onRegenerate, isRegenerating }: SectionSidebarProps) {
   const [pageOpen, setPageOpen] = useState(true);
+  const [regenPrompt, setRegenPrompt] = useState('');
+  const [showRegenInput, setShowRegenInput] = useState(false);
+
+  function handleRegenerate() {
+    if (!showRegenInput) {
+      setShowRegenInput(true);
+      return;
+    }
+    if (!regenPrompt.trim()) return;
+    onRegenerate?.(regenPrompt.trim());
+    setRegenPrompt('');
+    setShowRegenInput(false);
+  }
 
   return (
     <aside className="w-[260px] shrink-0 border-r border-gray-100 bg-white flex flex-col">
@@ -43,9 +59,40 @@ export function SectionSidebar({ active, onSelect }: SectionSidebarProps) {
           <span className="text-[12px] font-semibold text-ember">Autonomously generated</span>
         </div>
         <div className="text-[12px] text-ink-muted mb-3">May 15, 2025 at 10:30 AM</div>
-        <button className="w-full h-8 rounded-[var(--radius-sm)] border border-gray-200 text-[12px] font-medium text-ink-soft hover:bg-gray-50 transition-colors flex items-center justify-center gap-1.5">
-          <Sparkles className="size-3" />
-          Regenerate
+
+        {showRegenInput && (
+          <div className="mb-2">
+            <textarea
+              value={regenPrompt}
+              onChange={(e) => setRegenPrompt(e.target.value)}
+              placeholder="What would you like to change?"
+              rows={3}
+              className="w-full rounded-[var(--radius-sm)] border border-gray-200 bg-white px-2.5 py-2 text-[12px] text-ink placeholder:text-ink-faint resize-none focus:outline-none focus:border-ember focus:ring-1 focus:ring-ember/20 transition-all"
+            />
+          </div>
+        )}
+
+        <button
+          onClick={handleRegenerate}
+          disabled={isRegenerating || (showRegenInput && !regenPrompt.trim())}
+          className="w-full h-8 rounded-[var(--radius-sm)] border border-gray-200 text-[12px] font-medium text-ink-soft hover:bg-gray-50 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
+        >
+          {isRegenerating ? (
+            <>
+              <Loader2 className="size-3 animate-spin" />
+              Regenerating…
+            </>
+          ) : showRegenInput ? (
+            <>
+              <Send className="size-3" />
+              Regenerate
+            </>
+          ) : (
+            <>
+              <Sparkles className="size-3" />
+              Regenerate
+            </>
+          )}
         </button>
       </div>
 
