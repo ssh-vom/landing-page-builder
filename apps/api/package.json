@@ -1,0 +1,22 @@
+{
+  "name": "@kiloforge/api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "build": "tsc --noEmit",
+    "d1:create": "wrangler d1 create kiloforge",
+    "d1:migrate:local": "wrangler d1 migrations apply kiloforge --local",
+    "d1:migrate": "wrangler d1 migrations apply kiloforge --remote"
+  },
+  "dependencies": {
+    "hono": "^4.7.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260430.0",
+    "typescript": "^5.7.2",
+    "wrangler": "^4.50.0"
+  }
+}
