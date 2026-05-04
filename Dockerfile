@@ -22,7 +22,7 @@ FROM base AS runner
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build /app /app
-# Force rebuild native modules (better-sqlite3) for this platform
-RUN pnpm rebuild
+# Remove pnpm symlinked node_modules and reinstall with npm (no symlinks, native modules compile in place)
+RUN rm -rf node_modules apps/server/node_modules && npm install --prefix apps/server
 EXPOSE 3001
-CMD ["pnpm", "--filter", "server", "run", "start"]
+CMD ["node", "apps/server/dist/index.js"]
